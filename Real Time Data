@@ -1,0 +1,118 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Clock, TreePine, Thermometer, Factory, Droplet, Cloud, Info } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+const ClimateClock = () => {
+  // API endpoints for real-time data
+  const API_ENDPOINTS = {
+    co2: 'https://api.climatiq.io/data/co2',
+    temperature: 'https://api.climatiq.io/data/temperature',
+    seaLevel: 'https://api.climatiq.io/data/sea-level',
+    // Add other endpoints as needed
+  };
+
+  const [timeLeft, setTimeLeft] = useState({
+    years: 0,
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0
+  });
+  
+  const [metrics, setMetrics] = useState({
+    co2: 0,
+    deforestation: 0,
+    glacierMelt: 0,
+    seaLevel: 0,
+    temperature: 1.2,
+    speciesLost: 0,
+    showInfo: false
+  });
+
+  // Fetch real-time data from APIs
+  const fetchLiveData = async () => {
+    try {
+      // Example API calls (you'll need to replace with actual API endpoints and keys)
+      const [co2Response, tempResponse, seaLevelResponse] = await Promise.all([
+        fetch(API_ENDPOINTS.co2, {
+          headers: {
+            'Authorization': process.env.NEXT_PUBLIC_CLIMATIQ_API_KEY
+          }
+        }),
+        fetch(API_ENDPOINTS.temperature),
+        fetch(API_ENDPOINTS.seaLevel)
+      ]);
+
+      const co2Data = await co2Response.json();
+      const tempData = await tempResponse.json();
+      const seaLevelData = await seaLevelResponse.json();
+
+      return {
+        co2: co2Data.value,
+        temperature: tempData.value,
+        seaLevel: seaLevelData.value
+      };
+    } catch (error) {
+      console.error('Error fetching live data:', error);
+      return null;
+    }
+  };
+
+  // Calculate metrics with real-time data
+  const calculateMetrics = useCallback(async () => {
+    const now = Date.now();
+    const targetDate = new Date('2030-01-01').getTime();
+    const difference = targetDate - now;
+
+    // Update countdown
+    setTimeLeft({
+      years: Math.floor(difference / (1000 * 60 * 60 * 24 * 365)),
+      days: Math.floor((difference % (1000 * 60 * 60 * 24 * 365)) / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+      minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+      seconds: Math.floor((difference % (1000 * 60)) / 1000)
+    });
+
+    // Fetch live data every minute
+    const liveData = await fetchLiveData();
+    
+    if (liveData) {
+      setMetrics(prev => ({
+        ...prev,
+        co2: liveData.co2,
+        temperature: liveData.temperature,
+        seaLevel: liveData.seaLevel,
+        // Update other metrics as needed
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId;
+    let dataInterval;
+    
+    const updateMetrics = () => {
+      calculateMetrics();
+      animationFrameId = requestAnimationFrame(updateMetrics);
+    };
+
+    // Update visual countdown continuously
+    updateMetrics();
+    
+    // Fetch new data every minute
+    dataInterval = setInterval(() => {
+      calculateMetrics();
+    }, 60000);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      clearInterval(dataInterval);
+    };
+  }, [calculateMetrics]);
+
+  // Rest of the component remains the same...
+  // (MetricCard component and return statement)
+};
+
+export default ClimateClock;
